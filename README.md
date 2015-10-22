@@ -10,7 +10,8 @@ but you are invited to use it for your own programs.
 If your Lasercutter is not supported, please contribute by implementing
 the your driver as a subclass of the LaserCutter.java class.
 
-##FreakyAttic Modifications
+FreakyAttic Modifications
+-------------------------
 
 This repository is a copy from the original one, and used to implement 
 a custom **gCode output driver** to generate a file for GCode interpreters 
