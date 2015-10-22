@@ -27,7 +27,7 @@ import com.t_oster.liblasercut.drivers.*;
  */
 public class LibInfo
 {
-  private static String VERSION = "visicut1.7";
+  private static String VERSION = "visicut1.8b";
   
   public static String getVersion()
   {
@@ -45,7 +45,8 @@ public class LibInfo
       Dummy.class,
       IModelaMill.class,
       SampleDriver.class,
-      ExportSVG.class
+      ExportSVG.class,
+      gCodeCutter.class
     };
   }
 }
