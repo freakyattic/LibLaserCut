@@ -28,87 +28,41 @@ import java.util.LinkedList;
  */
 public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
   
-  private boolean hidePurge = true;
   private boolean hideVentilation = false;
   private boolean hideFocus = false;
-  private boolean hideFrequency = true;
-    
+  
+  private float speed = 100;
   private boolean ventilation = true;
+  private int passes = 1;
 
-  public gCodeCutterProperty( boolean hideVentilation, boolean hideFocus, boolean hideFrequency)
+  public gCodeCutterProperty( boolean hideVentilation, boolean hideFocus)
   {
     //this.hidePurge = hidePurge;
     this.hideVentilation = hideVentilation;
     this.hideFocus = hideFocus;
-    this.hideFrequency = hideFrequency;
   }
   
   public gCodeCutterProperty()
   {
-    this( false, false, false);
+    this( false, false);
   }
   
-  /**
-   * Get the value of ventilation
-   *
-   * @return the value of ventilation
-   */
-  public boolean getVentilation()
-  {
-    return ventilation;
-  }
-
-  /**
-   * Set the value of ventilation
-   *
-   * @param ventilation new value of ventilation
-   */
-  public void setVentilation(boolean ventilation)
-  {
-    this.ventilation = ventilation;
-  }
-  private boolean purge = true;
-
-  /**
-   * Get the value of purge
-   *
-   * @return the value of purge
-   */
-  public boolean getPurge()
-  {
-    return purge;
-  }
-
-  /**
-   * Set the value of purge
-   *
-   * @param purge new value of purge
-   */
-  public void setPurge(boolean purge)
-  {
-    this.purge = purge;
-  }
-
   @Override
   public String[] getPropertyKeys()
   {
     LinkedList<String> result = new LinkedList<String>();
     result.addAll(Arrays.asList(super.getPropertyKeys()));
+      
+    result.remove("frequency");
+    result.add("passes");
+    
     if (this.hideFocus)
     {
       result.remove("focus");
     }
-    if (this.hideFrequency)
-    {
-      result.remove("frequency");
-    }
     if (!this.hideVentilation)
     {
       result.add("ventilation");
-    }
-    if (!this.hidePurge)
-    {
-      result.add("purge");
     }
     
     return result.toArray(new String[0]);
@@ -119,11 +73,15 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
   {
     if ("ventilation".equals(name))
     {
-      return (Boolean) this.getVentilation();
+      return (Boolean) this.ventilation;
     }
-    else if ("purge".equals(name))
+    else if ("passes".equals(name))
     {
-      return (Boolean) this.getPurge();
+      return (int) this.getPasses();
+    }
+    else if ("speed".equals(name))
+    {
+      return (Float) this.getSpeed();
     }
     else
     {
@@ -136,11 +94,15 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
   {
     if ("ventilation".equals(name))
     {
-      this.setVentilation((Boolean) value);
+      this.ventilation = ((Boolean) value);
     }
-    else if ("purge".equals(name))
+    else if ("passes".equals(name))
     {
-      this.setPurge((Boolean) value);
+      this.setPasses( (Integer) value);
+    }
+    else if ("speed".equals(name))
+    {
+      this.setSpeed((Float)value);
     }
     else
     {
@@ -171,7 +133,10 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
         if (this.ventilation != other.ventilation) {
             return false;
         }
-        if (this.purge != other.purge) {
+        if (this.passes != other.passes) {
+            return false;
+        }
+        if (this.speed != other.speed) {
             return false;
         }
         return super.equals(other);
@@ -181,10 +146,39 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
     public int hashCode() {
         int hash = 5;
         hash = 97 * hash + (this.ventilation ? 1 : 0);
-        hash = 97 * hash + (this.purge ? 1 : 0);
         hash = 97 * hash + super.hashCode();
         return hash;
     }
   
+    @Override
+    public void setSpeed(float speed)
+    {
+      System.out.print ("Mierda " + speed);
+      
+      speed = speed < 0 ? 0 : speed;
+      speed = speed > 4000 ? 4000 : speed;
+      this.speed = speed;
+    }
+    
+    @Override
+    public float getSpeed()
+    {
+      return this.speed;
+    }
   
+    public boolean getVentilation()
+    {
+      return this.ventilation;
+    }
+  
+    public Integer getPasses()
+    {
+      return this.passes;
+    }
+    
+    public void setPasses(int passes)
+    {      
+      passes = passes < 1 ? 1 : passes;
+      this.passes = passes;
+    }
 }

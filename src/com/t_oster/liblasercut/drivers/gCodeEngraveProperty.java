@@ -30,9 +30,9 @@ import java.util.LinkedList;
 public class gCodeEngraveProperty extends gCodeCutterProperty
 {
   
-  public gCodeEngraveProperty( boolean hideVentilation, boolean hideFocus, boolean hideFrequency)
+  public gCodeEngraveProperty( boolean hideVentilation, boolean hideFocus)
   {
-    super(hideVentilation, hideFocus, hideFrequency);
+    super(hideVentilation, hideFocus);
   }
   
   public gCodeEngraveProperty()

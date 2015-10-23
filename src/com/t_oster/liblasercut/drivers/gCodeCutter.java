@@ -69,6 +69,9 @@ public class gCodeCutter extends LaserCutter
   private static final String SETTING_GCODEVENTOFF = "gCode Vent. Off";
   private static final String SETTING_GCODELASERON = "gCode Laser On";
   private static final String SETTING_GCODELASEROFF = "gCode Laser Off";
+  private static final String SETTING_MIRRORXAXIS = "Mirror X Axis";
+  private static final String SETTING_MIRRORYAXIS = "Mirror Y Axis";
+  
   
 //#############################################################################
 //        Properties
@@ -88,6 +91,9 @@ public class gCodeCutter extends LaserCutter
   protected double bedWidth = 300;
   protected double bedHeight = 210;
   
+  protected boolean mirrorXaxis = false;
+  protected boolean mirrorYaxis = true;
+  
   private boolean supportsPower = true;
   private boolean supportsFocus = false;
   private boolean supportsVentilation = false;
@@ -97,10 +103,12 @@ public class gCodeCutter extends LaserCutter
     SETTING_OUTFILE,
     SETTING_BEDWIDTH,
     SETTING_BEDHEIGHT,
+    SETTING_MIRRORXAXIS,
+    SETTING_MIRRORYAXIS,
     SETTING_SUPPORTS_VENTILATION,
-    SETTING_SUPPORTS_FOCUS,
+    //SETTING_SUPPORTS_FOCUS,
     SETTING_SUPPORTS_POWER,
-    SETTING_RASTER_WHITESPACE,
+    //SETTING_RASTER_WHITESPACE,
     SETTING_GCODEHEADER,
     SETTING_GCODEFOOTER,
     SETTING_GCODEVENTON,
@@ -162,6 +170,14 @@ public class gCodeCutter extends LaserCutter
     {
       return (Double) this.bedHeight;
     }
+    else if (SETTING_MIRRORXAXIS.equals(attribute))
+    {
+      return (Boolean) this.mirrorXaxis;
+    }
+    else if (SETTING_MIRRORYAXIS.equals(attribute))
+    {
+      return (Boolean) this.mirrorYaxis;
+    }
     else if (SETTING_GCODEHEADER.equals(attribute))
     {
       return (String) this.gcodeHeader;
@@ -219,6 +235,14 @@ public class gCodeCutter extends LaserCutter
     else if (SETTING_BEDHEIGHT.equals(attribute))
     {
       this.bedHeight = (Double)value;
+    }
+    else if (SETTING_MIRRORXAXIS.equals(attribute))
+    {
+      this.mirrorXaxis = (Boolean)value;
+    }
+    else if (SETTING_MIRRORYAXIS.equals(attribute))
+    {
+      this.mirrorYaxis = (Boolean)value;
     }
     else if (SETTING_GCODEHEADER.equals(attribute))
     {
@@ -301,51 +325,95 @@ public class gCodeCutter extends LaserCutter
   
   private double prevX = -1;
   private double prevY = -1;
-  
+
   private float previousPower = -1;
+  
+  private boolean gcodeG00Printed = false;
+  private boolean gcodeG01Printed = false;
+  
   private void move(PrintStream out, double x, double y)
   {
+    if(mirrorXaxis)
+      x *= -1;
+    if(mirrorYaxis)
+      y *= -1;
+    
     if((prevX == x)&&(prevY ==y))
       return;
+   
+    //Update power if its value it is updated.
+    if( previousPower != -1)
+    {
+      previousPower = -1;
+      
+      out.println(this.gcodeLaserOff);
+    }
+    
+    //Print G00 movement code
+    if(!gcodeG00Printed)
+    {
+      out.print("G00 ");
+      gcodeG00Printed = true;
+      gcodeG01Printed = false;
+    }  
+    
+    if(prevX != x)
+      out.printf("X%.4f ", x);
+    
+    if(prevY != y)
+      out.printf("Y%.4f", y);
+    
+    out.print("\n"); //end of line
+    
     prevX = x;
     prevY = y;
-    
-    previousPower = -1;
-    out.println(this.gcodeLaserOff);
-    out.printf("G00 X%.4f Y%.4f\n", x, y*(-1));
   }
 
   private void line(PrintStream out, double x, double y)
   {
+    //Mirror Axis
+    if(mirrorXaxis)
+      x *= -1;
+    if(mirrorYaxis)
+      y *= -1;
+    
+    //If position has not changed
     if((prevX == x)&&(prevY ==y))
       return;
-    prevX = x;
-    prevY = y;
     
-    
+    //Update power if its value it is updated.
     if( previousPower != currentPower)
     {
       previousPower = currentPower;
       
       if(this.supportsPower)
-        out.printf("%s S%d\n", this.gcodeLaserOn, (int)this.currentPower);
+        out.printf("%s S%d\n", this.gcodeLaserOn, (int)(this.currentPower*100));
       else
         out.println(this.gcodeLaserOn);
     }
-    out.printf("G01 X%.4f Y%.4f\n",  x, y*(-1));
-  }
-  private void loadBitmapLine(PrintStream out, List<Long> dwords)
-  {
-    out.printf("Bitmap- %s %s ", "1", ""+(dwords.size()*32));
-    for(Long d:dwords)
+ 
+    //Print G01 movement code
+    if(!gcodeG01Printed)
     {
-      out.printf(" "+d);
-    }
-    out.printf("\n");
+      out.print("G01 ");
+      gcodeG00Printed = false;
+      gcodeG01Printed = true;
+    }  
+    
+    if(prevX != x)
+      out.printf("X%.4f ", x);
+    
+    if(prevY != y)
+      out.printf("Y%.4f", y);
+    
+    out.print("\n"); //end of line
+    
+    prevX = x;
+    prevY = y;
   }
 
   private float currentPower = -1;
-  private void setPower(PrintStream out, float power)
+  private void setPower(float power)
   {
     currentPower = power;
   }
@@ -355,7 +423,7 @@ public class gCodeCutter extends LaserCutter
   {
     if (currentSpeed != speed)
     {
-      out.printf("F%d\n", (int) (speed));
+      out.printf("F%d ;Feed Rate\n", (int) (speed));
       currentSpeed = speed;
     }
   }
@@ -392,9 +460,11 @@ public class gCodeCutter extends LaserCutter
     prevX = -1;
     prevY = -1;
     previousPower = -1;
-      
-    int i = 0;
+    gcodeG01Printed = false;
+    gcodeG00Printed = false;
+    currentSpeed = -1;
     
+    int i = 0;
     int max = job.getParts().size();
     
     for (JobPart p : job.getParts())
@@ -422,24 +492,34 @@ public class gCodeCutter extends LaserCutter
   {
     ByteArrayOutputStream result = new ByteArrayOutputStream();
     PrintStream out = new PrintStream(result, true, "US-ASCII");
+    gCodeEngraveProperty prop = vp.getCurrentCuttingProperty() instanceof gCodeEngraveProperty ? (gCodeEngraveProperty) vp.getCurrentCuttingProperty() : new gCodeEngraveProperty(vp.getCurrentCuttingProperty());
+    
     out.println("; Vector gCode ------------------------------------------------------");
-    for (VectorCommand cmd : vp.getCommandList())
+    
+    for( int x = 0 ; x < prop.getPasses(); x++)
     {
-      switch (cmd.getType())
+      if(prop.getPasses()>1)
+        out.println(";--Pass number " + (x+1) + "--");
+      
+      for (VectorCommand cmd : vp.getCommandList())
       {
-        case MOVETO:
-          move(out, Util.px2mm(cmd.getX(), resolution), Util.px2mm(cmd.getY(), resolution));
-          break;
-        case LINETO:
-          line(out, Util.px2mm(cmd.getX(), resolution), Util.px2mm(cmd.getY(), resolution));
-          break;
-        case SETPROPERTY:
+        switch (cmd.getType())
         {
-          this.setCurrentProperty(out, cmd.getProperty());
-          break;
+          case MOVETO:
+            move(out, Util.px2mm(cmd.getX(), resolution), Util.px2mm(cmd.getY(), resolution));
+            break;
+          case LINETO:
+            line(out, Util.px2mm(cmd.getX(), resolution), Util.px2mm(cmd.getY(), resolution));
+            break;
+          case SETPROPERTY:
+          {
+            this.setCurrentProperty(out, cmd.getProperty());
+            break;
+          }
         }
       }
     }
+    
     return result.toByteArray();
   }
 
@@ -491,7 +571,7 @@ public class gCodeCutter extends LaserCutter
               }
               else
               {
-                setPower(out, maxPower * (0xFF & old) / 255);
+                setPower(maxPower * (0xFF & old) / 255);
                 line(out, lineStart.x + pix - 1, lineStart.y);
                 move(out, lineStart.x + pix, lineStart.y);
               }
@@ -499,7 +579,7 @@ public class gCodeCutter extends LaserCutter
             }
           }
           //last point is also not "white"
-          setPower(out, maxPower * (0xFF & bytes.get(bytes.size() - 1)) / 255);
+          setPower(maxPower * (0xFF & bytes.get(bytes.size() - 1)) / 255);
           line(out, lineStart.x + bytes.size() - 1, lineStart.y);
         }
         else
@@ -517,7 +597,7 @@ public class gCodeCutter extends LaserCutter
               }
               else
               {
-                setPower(out, maxPower * (0xFF & old) / 255);
+                setPower( maxPower * (0xFF & old) / 255);
                 line(out, lineStart.x + pix + 1, lineStart.y);
                 move(out, lineStart.x + pix, lineStart.y);
               }
@@ -525,7 +605,7 @@ public class gCodeCutter extends LaserCutter
             }
           }
           //last point is also not "white"
-          setPower(out, maxPower * (0xFF & bytes.get(0)) / 255);
+          setPower(maxPower * (0xFF & bytes.get(0)) / 255);
           line(out, lineStart.x, lineStart.y);
         }
       }
@@ -630,7 +710,7 @@ public class gCodeCutter extends LaserCutter
           //move to the first point of the line
           move(out, lineStart.x, lineStart.y);
           List<Long> dwords = this.byteLineToDwords(bytes, true);
-          loadBitmapLine(out, dwords);
+          //TODO FREAKYATTIC RasterImage  loadBitmapLine(out, dwords);
           line(out, lineStart.x + (dwords.size()*32), lineStart.y);
         }
         else
@@ -638,7 +718,7 @@ public class gCodeCutter extends LaserCutter
           //move to the first point of the line
           List<Long> dwords = this.byteLineToDwords(bytes, false);
           move(out, lineStart.x+(dwords.size()*32), lineStart.y);
-          loadBitmapLine(out, dwords);
+          //TODO FREAKYATTIC RasterImage  loadBitmapLine(out, dwords);
           line(out, lineStart.x, lineStart.y);
         }
       }
@@ -664,7 +744,7 @@ public class gCodeCutter extends LaserCutter
         setVentilation(out, prop.getVentilation());
       }
       setSpeed(out, prop.getSpeed());
-      setPower(out, prop.getPower());
+      setPower(prop.getPower());
     }
     else
     {
@@ -746,19 +826,19 @@ public class gCodeCutter extends LaserCutter
   @Override
   public gCodeCutterProperty getLaserPropertyForVectorPart()
   {
-    return new gCodeCutterProperty(!this.supportsVentilation, !this.supportsFocus, !this.supportsPower);
+    return new gCodeCutterProperty(!this.supportsVentilation, !this.supportsFocus);
   }
 
   @Override
   public gCodeEngraveProperty getLaserPropertyForRasterPart()
   {
-    return new gCodeEngraveProperty(!this.supportsVentilation, !this.supportsFocus, !this.supportsPower);
+    return new gCodeEngraveProperty(!this.supportsVentilation, !this.supportsFocus);
   }
 
   @Override
   public gCodeEngraveProperty getLaserPropertyForRaster3dPart()
   {
-    return new gCodeEngraveProperty(!this.supportsVentilation, !this.supportsFocus, !this.supportsPower);
+    return new gCodeEngraveProperty(!this.supportsVentilation, !this.supportsFocus);
   }
 
   @Override
@@ -767,3 +847,4 @@ public class gCodeCutter extends LaserCutter
     return "Generic gCode driver";
   }
 }
+
