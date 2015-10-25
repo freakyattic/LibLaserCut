@@ -47,15 +47,25 @@ import java.util.Locale;
  * This class implements a driver for a Generic gCode Lasercutter board. 
  * To be used with a gCode interpreter like ; Mach3, Marlin, Linuxcn
  * 
- * This class is a modified copy version of the LAOSCutter driver class, all
- * credit goes to the author Thomas Oster <thomas.oster@rwth-aachen.de>
- * Modifications to support the generation of Gcode by Freakyattic
+ * This class is a modified copy version of the LAOSCutter driver class by
+ * Thomas Oster <thomas.oster@rwth-aachen.de> .
+ * Modifications to support the generation of Gcode by Freakyattic.
+ * 
+ * TODO LIST:
+ *    - Add Laser Start delay ms
+ *    - Add depth passes on several layers
+ *    - Implement Z focus
+ *    - Add extra movement option in mm; for engrave and engrave 3D, to allow the motors speed to ramp up
+ *      Note: Check that the X position doesn't goes lower than 0
+ *    -
  * 
  * @author FreakyAttic - JavierFG <freakyattic@javitonet.com>
  */
 public class gCodeCutter extends LaserCutter
 {
 
+  private static final String DRIVERVERSION = "1.0";
+  
   private static final String SETTING_OUTFILE = "gCode Output File";
   private static final String SETTING_BEDWIDTH = "Laserbed width";
   private static final String SETTING_BEDHEIGHT = "Laserbed height";
@@ -287,11 +297,7 @@ public class gCodeCutter extends LaserCutter
           500d,
           600d,
           1000d,
-          1200d,
-          1500d,
-          2000d,
-          4000d,
-          8000d,
+          1200d
         });
     }
     return resolutions;
@@ -538,28 +544,33 @@ public class gCodeCutter extends LaserCutter
     this.setCurrentProperty(out, prop);
     float maxPower = this.currentPower;
     boolean bu = prop.isEngraveBottomUp();
+    
     for (int line = bu ? rp.getRasterHeight()-1 : 0; bu ? line >= 0 : line < rp.getRasterHeight(); line += bu ? -1 : 1 )
     {
       Point lineStart = rasterStart.clone();
       lineStart.y += line;
-      List<Byte> bytes = rp.getRasterLine(line);
+      List<Byte> bytes = rp.getInvertedRasterLine(line);
+      
       //remove heading zeroes
       while (bytes.size() > 0 && bytes.get(0) == 0)
       {
         bytes.remove(0);
         lineStart.x += 1;
       }
+      
       //remove trailing zeroes
       while (bytes.size() > 0 && bytes.get(bytes.size() - 1) == 0)
       {
         bytes.remove(bytes.size() - 1);
       }
+      
       if (bytes.size() > 0)
       {
         if (dirRight)
         {
           //move to the first nonempyt point of the line
-          move(out, lineStart.x, lineStart.y);
+          move(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
+          
           byte old = bytes.get(0);
           for (int pix = 0; pix < bytes.size(); pix++)
           {
@@ -567,25 +578,24 @@ public class gCodeCutter extends LaserCutter
             {
               if (old == 0)
               {
-                move(out, lineStart.x + pix, lineStart.y);
+                move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
               }
               else
               {
                 setPower(maxPower * (0xFF & old) / 255);
-                line(out, lineStart.x + pix - 1, lineStart.y);
-                move(out, lineStart.x + pix, lineStart.y);
+                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
               }
               old = bytes.get(pix);
             }
           }
           //last point is also not "white"
           setPower(maxPower * (0xFF & bytes.get(bytes.size() - 1)) / 255);
-          line(out, lineStart.x + bytes.size() - 1, lineStart.y);
+          line(out, Util.px2mm(lineStart.x + bytes.size() - 1, resolution), Util.px2mm(lineStart.y, resolution));
         }
         else
         {
           //move to the last nonempty point of the line
-          move(out, lineStart.x + bytes.size() - 1, lineStart.y);
+          move(out, Util.px2mm(lineStart.x + bytes.size() - 1, resolution), Util.px2mm(lineStart.y, resolution) );
           byte old = bytes.get(bytes.size() - 1);
           for (int pix = bytes.size() - 1; pix >= 0; pix--)
           {
@@ -593,20 +603,19 @@ public class gCodeCutter extends LaserCutter
             {
               if (old == 0)
               {
-                move(out, lineStart.x + pix, lineStart.y);
+                move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
               }
               else
               {
                 setPower( maxPower * (0xFF & old) / 255);
-                line(out, lineStart.x + pix + 1, lineStart.y);
-                move(out, lineStart.x + pix, lineStart.y);
+                line(out, Util.px2mm(lineStart.x + pix + 1, resolution), Util.px2mm(lineStart.y, resolution));
               }
               old = bytes.get(pix);
             }
           }
           //last point is also not "white"
           setPower(maxPower * (0xFF & bytes.get(0)) / 255);
-          line(out, lineStart.x, lineStart.y);
+          line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
         }
       }
       if (!prop.isEngraveUnidirectional())
@@ -614,50 +623,11 @@ public class gCodeCutter extends LaserCutter
         dirRight = !dirRight;
       }
     }
+    
+    //Print power off - For Safety
+    out.println(this.gcodeLaserOff);
+    
     return result.toByteArray();
-  }
-
-  /**
-   * This Method takes a raster-line represented by a list of bytes,
-   * where: byte0 ist the left-most byte, in one byte, the MSB is the
-   * left-most bit, 0 representing laser off, 1 representing laser on.
-   * The Output List of longs, where each value is the unsigned dword
-   * of 4 bytes of the input each, where the first dword is the leftmost
-   * dword and the LSB is the leftmost bit. If outputLeftToRight is false,
-   * the first dword is the rightmost dword and the LSB of each dword is the
-   * the Output is padded with zeroes on the right side, if leftToRight is true,
-   * on the left-side otherwise
-   * rightmost bit
-   * @param line
-   * @param outputLeftToRight
-   * @return
-   */
-  public List<Long> byteLineToDwords(List<Byte> line, boolean outputLeftToRight)
-  {
-    List<Long> result = new ArrayList<Long>();
-    int s = line.size();
-    for (int i=0;i<s;i++)
-    {
-      line.set(i, (byte) (Integer.reverse(0xFF&line.get(i))>>>24));
-    }
-    for(int i=0; i<s; i+=4)
-    {
-      result.add(
-        (((long) (i+3 < s ? 0xFF&line.get(i+3) : 0))<<24)
-        + (((long) (i+2 < s ? 0xFF&line.get(i+2) : 0))<<16)
-        + (((long) (i+1 < s ? 0xFF&line.get(i+1) : 0))<<8)
-        + ((long) (0xFF&line.get(i)))
-        );
-    }
-    if (!outputLeftToRight)
-    {
-      Collections.reverse(result);
-      for(int i=0;i<result.size();i++)
-      {
-        result.set(i, Long.reverse(result.get(i)) >>> 32);
-      }
-    }
-    return result;
   }
 
   private byte[] generategCodeRasterCode(RasterPart rp, double resolution) throws UnsupportedEncodingException, IOException
@@ -668,65 +638,89 @@ public class gCodeCutter extends LaserCutter
     
     boolean dirRight = true;
     Point rasterStart = rp.getRasterStart();
+    
     gCodeEngraveProperty prop = rp.getLaserProperty() instanceof gCodeEngraveProperty ? (gCodeEngraveProperty) rp.getLaserProperty() : new gCodeEngraveProperty(rp.getLaserProperty());
+    
     this.setCurrentProperty(out, prop);
+        
     boolean bu = prop.isEngraveBottomUp();
     for (int line = bu ? rp.getRasterHeight()-1 : 0; bu ? line >= 0 : line < rp.getRasterHeight(); line += bu ? -1 : 1)
     {
       Point lineStart = rasterStart.clone();
       lineStart.y += line;
-      List<Byte> bytes = rp.getRasterLine(line);
-      //remove heading zeroes
-      while (bytes.size() > 0 && bytes.get(0) == 0)
+      
+      if (dirRight)
       {
-        lineStart.x += 8;
-        bytes.remove(0);
+        //move to the first point of the line
+        move(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
+
+        boolean old = rp.isBlack(0, line);
+        for (int pix = 0; pix < rp.getRasterWidth() - 1; pix++)
+        {
+          if (rp.isBlack(pix, line) != old)
+          {
+            if (old == false)
+              move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
+            else
+              line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
+            
+            old = rp.isBlack(pix, line);
+          }
+        }
+        
+        //Last point
+        if((old == true) && (rp.isBlack(rp.getRasterWidth() - 1, line) == true))
+        {
+          line(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution));
+        }        
       }
-      //remove trailing zeroes
-      while (bytes.size() > 0 && bytes.get(bytes.size()-1) == 0)
+      else
       {
-        bytes.remove(bytes.size()-1);
+        //move to the last point of the line
+        move(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution) );
+        
+        boolean old = rp.isBlack(0, line);
+        for (int pix = rp.getRasterWidth() - 1; pix >= 0; pix--)
+        {
+          if (rp.isBlack(pix, line) != old)
+          {
+            if (old == false)
+              move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
+            else
+              line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
+            
+            old = rp.isBlack(pix, line);
+          }
+        }
+        
+        //Last point
+        if((old == true) && (rp.isBlack(0, line) == true))
+        {
+          line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
+        }
+        
       }
-      if (bytes.size() > 0)
-      {
-        //add space on the left side
-        int space = (int) Util.mm2px(this.addSpacePerRasterLine, resolution);
-        while (space > 0 && lineStart.x >= 8)
-        {
-          bytes.add(0, (byte) 0);
-          space -= 8;
-          lineStart.x -=8;
-        }
-        //add space on the right side
-        space = (int) Util.mm2px(this.addSpacePerRasterLine, resolution);
-        int max = (int) Util.mm2px(this.getBedWidth(), resolution);
-        while (space > 0 && lineStart.x+(8*bytes.size()) < max-8)
-        {
-          bytes.add((byte) 0);
-          space -= 8;
-        }
-        if (dirRight)
-        {
-          //move to the first point of the line
-          move(out, lineStart.x, lineStart.y);
-          List<Long> dwords = this.byteLineToDwords(bytes, true);
-          //TODO FREAKYATTIC RasterImage  loadBitmapLine(out, dwords);
-          line(out, lineStart.x + (dwords.size()*32), lineStart.y);
-        }
-        else
-        {
-          //move to the first point of the line
-          List<Long> dwords = this.byteLineToDwords(bytes, false);
-          move(out, lineStart.x+(dwords.size()*32), lineStart.y);
-          //TODO FREAKYATTIC RasterImage  loadBitmapLine(out, dwords);
-          line(out, lineStart.x, lineStart.y);
-        }
-      }
+
       if (!prop.isEngraveUnidirectional())
       {
         dirRight = !dirRight;
       }
+
+//      //Test to print in the System output the image
+//      for ( int x = 0; x < rp.getRasterWidth(); x++)
+//      {
+//        if(rp.isBlack(x, line))
+//          System.out.print("1");
+//        else
+//          System.out.print(" ");
+//      }
+//      System.out.print("\n");
+
     }
+    
+    //Print power off - For Safety
+    out.println(this.gcodeLaserOff);
+    
     return result.toByteArray();
   }
   
@@ -845,6 +839,11 @@ public class gCodeCutter extends LaserCutter
   public String getModelName()
   {
     return "Generic gCode driver";
+  }
+  
+  public String getModelVersion()
+  {
+    return "Ver. " + DRIVERVERSION;
   }
 }
 
