@@ -536,93 +536,99 @@ public class gCodeCutter extends LaserCutter
     PrintStream out = new PrintStream(result, true, "US-ASCII");
     out.println("; Raster 3D gCode ------------------------------------------------------");
     
-    boolean dirRight = true;
-    
-    Point rasterStart = rp.getRasterStart();
-    
     gCodeEngraveProperty prop = rp.getLaserProperty() instanceof gCodeEngraveProperty ? (gCodeEngraveProperty) rp.getLaserProperty() : new gCodeEngraveProperty(rp.getLaserProperty());
     this.setCurrentProperty(out, prop);
     float maxPower = this.currentPower;
     boolean bu = prop.isEngraveBottomUp();
     
-    for (int line = bu ? rp.getRasterHeight()-1 : 0; bu ? line >= 0 : line < rp.getRasterHeight(); line += bu ? -1 : 1 )
+    for( int x = 0 ; x < prop.getPasses(); x++)
     {
-      Point lineStart = rasterStart.clone();
-      lineStart.y += line;
-      List<Byte> bytes = rp.getInvertedRasterLine(line);
+      if(prop.getPasses()>1)
+        out.println(";--Pass number " + (x+1) + "--");
+    
+      boolean dirRight = true;
+      Point rasterStart = rp.getRasterStart();
       
-      //remove heading zeroes
-      while (bytes.size() > 0 && bytes.get(0) == 0)
+      for (int line = bu ? rp.getRasterHeight()-1 : 0; bu ? line >= 0 : line < rp.getRasterHeight(); line += bu ? -1 : 1 )
       {
-        bytes.remove(0);
-        lineStart.x += 1;
-      }
-      
-      //remove trailing zeroes
-      while (bytes.size() > 0 && bytes.get(bytes.size() - 1) == 0)
-      {
-        bytes.remove(bytes.size() - 1);
-      }
-      
-      if (bytes.size() > 0)
-      {
-        if (dirRight)
+        Point lineStart = rasterStart.clone();
+        lineStart.y += line;
+        List<Byte> bytes = rp.getInvertedRasterLine(line);
+
+        //remove heading zeroes
+        while (bytes.size() > 0 && bytes.get(0) == 0)
         {
-          //move to the first nonempyt point of the line
-          move(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
-          
-          byte old = bytes.get(0);
-          for (int pix = 0; pix < bytes.size(); pix++)
-          {
-            if (bytes.get(pix) != old)
-            {
-              if (old == 0)
-              {
-                move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
-              }
-              else
-              {
-                setPower(maxPower * (0xFF & old) / 255);
-                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
-              }
-              old = bytes.get(pix);
-            }
-          }
-          //last point is also not "white"
-          setPower(maxPower * (0xFF & bytes.get(bytes.size() - 1)) / 255);
-          line(out, Util.px2mm(lineStart.x + bytes.size() - 1, resolution), Util.px2mm(lineStart.y, resolution));
+          bytes.remove(0);
+          lineStart.x += 1;
         }
-        else
+
+        //remove trailing zeroes
+        while (bytes.size() > 0 && bytes.get(bytes.size() - 1) == 0)
         {
-          //move to the last nonempty point of the line
-          move(out, Util.px2mm(lineStart.x + bytes.size() - 1, resolution), Util.px2mm(lineStart.y, resolution) );
-          byte old = bytes.get(bytes.size() - 1);
-          for (int pix = bytes.size() - 1; pix >= 0; pix--)
+          bytes.remove(bytes.size() - 1);
+        }
+
+        if (bytes.size() > 0)
+        {
+          if (dirRight)
           {
-            if (bytes.get(pix) != old || pix == 0)
+            //move to the first nonempyt point of the line
+            move(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
+
+            byte old = bytes.get(0);
+            for (int pix = 0; pix < bytes.size(); pix++)
             {
-              if (old == 0)
+              if (bytes.get(pix) != old)
               {
-                move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
+                if (old == 0)
+                {
+                  move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
+                }
+                else
+                {
+                  setPower(maxPower * (0xFF & old) / 255);
+                  line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
+                }
+                old = bytes.get(pix);
               }
-              else
-              {
-                setPower( maxPower * (0xFF & old) / 255);
-                line(out, Util.px2mm(lineStart.x + pix + 1, resolution), Util.px2mm(lineStart.y, resolution));
-              }
-              old = bytes.get(pix);
             }
+            //last point is also not "white"
+            setPower(maxPower * (0xFF & bytes.get(bytes.size() - 1)) / 255);
+            line(out, Util.px2mm(lineStart.x + bytes.size() - 1, resolution), Util.px2mm(lineStart.y, resolution));
           }
-          //last point is also not "white"
-          setPower(maxPower * (0xFF & bytes.get(0)) / 255);
-          line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
+          else
+          {
+            //move to the last nonempty point of the line
+            move(out, Util.px2mm(lineStart.x + bytes.size() - 1, resolution), Util.px2mm(lineStart.y, resolution) );
+            byte old = bytes.get(bytes.size() - 1);
+            for (int pix = bytes.size() - 1; pix >= 0; pix--)
+            {
+              if (bytes.get(pix) != old || pix == 0)
+              {
+                if (old == 0)
+                {
+                  move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
+                }
+                else
+                {
+                  setPower( maxPower * (0xFF & old) / 255);
+                  line(out, Util.px2mm(lineStart.x + pix + 1, resolution), Util.px2mm(lineStart.y, resolution));
+                }
+                old = bytes.get(pix);
+              }
+            }
+            //last point is also not "white"
+            setPower(maxPower * (0xFF & bytes.get(0)) / 255);
+            line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
+          }
+        }
+        if (!prop.isEngraveUnidirectional())
+        {
+          dirRight = !dirRight;
         }
       }
-      if (!prop.isEngraveUnidirectional())
-      {
-        dirRight = !dirRight;
-      }
-    }
+      
+    } //end of passes
     
     //Print power off - For Safety
     out.println(this.gcodeLaserOff);
@@ -636,91 +642,98 @@ public class gCodeCutter extends LaserCutter
     PrintStream out = new PrintStream(result, true, "US-ASCII");
     out.println("; Raster gCode ------------------------------------------------------");
     
-    boolean dirRight = true;
-    Point rasterStart = rp.getRasterStart();
-    
     gCodeEngraveProperty prop = rp.getLaserProperty() instanceof gCodeEngraveProperty ? (gCodeEngraveProperty) rp.getLaserProperty() : new gCodeEngraveProperty(rp.getLaserProperty());
     
     this.setCurrentProperty(out, prop);
-        
     boolean bu = prop.isEngraveBottomUp();
-    for (int line = bu ? rp.getRasterHeight()-1 : 0; bu ? line >= 0 : line < rp.getRasterHeight(); line += bu ? -1 : 1)
-    {
-      Point lineStart = rasterStart.clone();
-      lineStart.y += line;
-      
-      if (dirRight)
-      {
-        //move to the first point of the line
-        move(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
-
-        boolean old = rp.isBlack(0, line);
-        for (int pix = 0; pix < rp.getRasterWidth() - 1; pix++)
-        {
-          if (rp.isBlack(pix, line) != old)
-          {
-            if (old == false)
-              move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
-            else
-              line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
-            
-            old = rp.isBlack(pix, line);
-          }
-        }
-        
-        //Last point
-        if((old == true) && (rp.isBlack(rp.getRasterWidth() - 1, line) == true))
-        {
-          line(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution));
-        }        
-      }
-      else
-      {
-        //move to the last point of the line
-        move(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution) );
-        
-        boolean old = rp.isBlack(0, line);
-        for (int pix = rp.getRasterWidth() - 1; pix >= 0; pix--)
-        {
-          if (rp.isBlack(pix, line) != old)
-          {
-            if (old == false)
-              move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
-            else
-              line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
-            
-            old = rp.isBlack(pix, line);
-          }
-        }
-        
-        //Last point
-        if((old == true) && (rp.isBlack(0, line) == true))
-        {
-          line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
-        }
-        
-      }
-
-      if (!prop.isEngraveUnidirectional())
-      {
-        dirRight = !dirRight;
-      }
-
-//      //Test to print in the System output the image
-//      for ( int x = 0; x < rp.getRasterWidth(); x++)
-//      {
-//        if(rp.isBlack(x, line))
-//          System.out.print("1");
-//        else
-//          System.out.print(" ");
-//      }
-//      System.out.print("\n");
-
-    }
     
+    for( int x = 0 ; x < prop.getPasses(); x++)
+    {
+      if(prop.getPasses()>1)
+        out.println(";--Pass number " + (x+1) + "--");
+      
+      Point rasterStart = rp.getRasterStart();
+      boolean dirRight = true;
+
+      for (int line = bu ? rp.getRasterHeight()-1 : 0; bu ? line >= 0 : line < rp.getRasterHeight(); line += bu ? -1 : 1)
+      {
+        Point lineStart = rasterStart.clone();
+        lineStart.y += line;
+
+        if (dirRight)
+        {
+          //move to the first point of the line
+          move(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
+
+          boolean old = rp.isBlack(0, line);
+          for (int pix = 0; pix < rp.getRasterWidth() - 1; pix++)
+          {
+            if (rp.isBlack(pix, line) != old)
+            {
+              if (old == false)
+                move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
+              else
+                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
+
+              old = rp.isBlack(pix, line);
+            }
+          }
+
+          //Last point
+          if((old == true) && (rp.isBlack(rp.getRasterWidth() - 1, line) == true))
+          {
+            line(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution));
+          }        
+        }
+        else
+        {
+          //move to the last point of the line
+          move(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution) );
+
+          boolean old = rp.isBlack(0, line);
+          for (int pix = rp.getRasterWidth() - 1; pix >= 0; pix--)
+          {
+            if (rp.isBlack(pix, line) != old)
+            {
+              if (old == false)
+                move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
+              else
+                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
+
+              old = rp.isBlack(pix, line);
+            }
+          }
+
+          //Last point
+          if((old == true) && (rp.isBlack(0, line) == true))
+          {
+            line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
+          }
+
+        }
+
+        if (!prop.isEngraveUnidirectional())
+        {
+          dirRight = !dirRight;
+        }
+
+  //      //Test to print in the System output the image
+  //      for ( int x = 0; x < rp.getRasterWidth(); x++)
+  //      {
+  //        if(rp.isBlack(x, line))
+  //          System.out.print("1");
+  //        else
+  //          System.out.print(" ");
+  //      }
+  //      System.out.print("\n");
+
+      }
+      
+    }//End of passes
+
     //Print power off - For Safety
     out.println(this.gcodeLaserOff);
-    
+
     return result.toByteArray();
   }
   
