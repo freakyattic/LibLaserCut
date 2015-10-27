@@ -13,7 +13,7 @@ Features:
 - Generation of a **output gCode text file**, that can be used to send it to the laser. No support for HTTP or Serial transfer.
 - **Custom GCode** codes for configuring turning on/off laser, ventilation, gcode header and footer.
 - Implemented functions for **Mark, Cut, Raster and Raster3D**.
-- Configuration options for: bidirectional cutting, multiple passes. 
+- Configuration options for: bidirectional cutting, multiple passes, mirror of X and Y axis.
 - **Optimized gCode** commands to reduce file size and redundant gCodes.
 
 Todo List:
