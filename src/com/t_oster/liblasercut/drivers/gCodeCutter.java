@@ -52,12 +52,11 @@ import java.util.Locale;
  * Modifications to support the generation of Gcode by Freakyattic.
  * 
  * TODO LIST:
- *    - Add depth passes on several layers
  *    - Implement Z focus
- *    -
  * 
  * DONE LIST:
  *    - Add Laser Start delay ms
+ *    - Add depth passes on several layers
  * 
  * 
  * @author FreakyAttic - JavierFG <freakyattic@javitonet.com>
