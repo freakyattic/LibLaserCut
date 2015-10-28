@@ -52,19 +52,20 @@ import java.util.Locale;
  * Modifications to support the generation of Gcode by Freakyattic.
  * 
  * TODO LIST:
- *    - Add Laser Start delay ms
  *    - Add depth passes on several layers
  *    - Implement Z focus
- *    - Add extra movement option in mm; for engrave and engrave 3D, to allow the motors speed to ramp up
- *      Note: Check that the X position doesn't goes lower than 0
  *    -
+ * 
+ * DONE LIST:
+ *    - Add Laser Start delay ms
+ * 
  * 
  * @author FreakyAttic - JavierFG <freakyattic@javitonet.com>
  */
 public class gCodeCutter extends LaserCutter
 {
 
-  private static final String DRIVERVERSION = "1.0";
+  private static final String DRIVERVERSION = "1.1";
   
   private static final String SETTING_OUTFILE = "gCode Output File";
   private static final String SETTING_BEDWIDTH = "Laserbed width";
@@ -79,6 +80,7 @@ public class gCodeCutter extends LaserCutter
   private static final String SETTING_GCODEVENTOFF = "gCode Vent. Off";
   private static final String SETTING_GCODELASERON = "gCode Laser On";
   private static final String SETTING_GCODELASEROFF = "gCode Laser Off";
+  private static final String SETTING_GCODELASERDELAY = "gCode Laser ON Delay ";
   private static final String SETTING_MIRRORXAXIS = "Mirror X Axis";
   private static final String SETTING_MIRRORYAXIS = "Mirror Y Axis";
   
@@ -89,7 +91,7 @@ public class gCodeCutter extends LaserCutter
   
   protected String outputFileName = "c:\\VisiCut_GCode.nc";
   
-  protected String gcodeHeader = "G90 ; Absolut Position\\nG21 ; Units in mm";
+  protected String gcodeHeader = "G90 ; Absolute distance\\nG21 ; Units in mm";
   protected String gcodeFooter = "M02";
   
   protected String gcodeVentOn  = "M106 ; Ventilation On";
@@ -97,6 +99,8 @@ public class gCodeCutter extends LaserCutter
   
   protected String gcodeLaserOn  = "M171";
   protected String gcodeLaserOff = "M170";
+  
+  protected String gcodeLaserDelay = "G4 P0.";
   
   protected double bedWidth = 300;
   protected double bedHeight = 210;
@@ -125,6 +129,7 @@ public class gCodeCutter extends LaserCutter
     SETTING_GCODEVENTOFF,
     SETTING_GCODELASERON,
     SETTING_GCODELASEROFF,
+    SETTING_GCODELASERDELAY,
   };
 
   @Override
@@ -212,6 +217,10 @@ public class gCodeCutter extends LaserCutter
     {
       return (String) this.gcodeLaserOff;
     }
+    else if (SETTING_GCODELASERDELAY.equals(attribute))
+    {
+      return (String) this.gcodeLaserDelay;
+    }
     return null;
   }
 
@@ -278,6 +287,10 @@ public class gCodeCutter extends LaserCutter
     {
       this.gcodeLaserOff = (String) value;
     }
+    else if (SETTING_GCODELASERDELAY.equals(attribute))
+    {
+      this.gcodeLaserDelay = (String) value;
+    }
   }
 
   private List<Double> resolutions;
@@ -337,6 +350,8 @@ public class gCodeCutter extends LaserCutter
   private boolean gcodeG00Printed = false;
   private boolean gcodeG01Printed = false;
   
+  private int laserDelay = 0;
+  
   private void move(PrintStream out, double x, double y)
   {
     if(mirrorXaxis)
@@ -348,12 +363,7 @@ public class gCodeCutter extends LaserCutter
       return;
    
     //Update power if its value it is updated.
-    if( previousPower != -1)
-    {
-      previousPower = -1;
-      
-      out.println(this.gcodeLaserOff);
-    }
+    this.printPowerOff(out);
     
     //Print G00 movement code
     if(!gcodeG00Printed)
@@ -387,16 +397,8 @@ public class gCodeCutter extends LaserCutter
     if((prevX == x)&&(prevY ==y))
       return;
     
-    //Update power if its value it is updated.
-    if( previousPower != currentPower)
-    {
-      previousPower = currentPower;
-      
-      if(this.supportsPower)
-        out.printf("%s S%d\n", this.gcodeLaserOn, (int)(this.currentPower*100));
-      else
-        out.println(this.gcodeLaserOn);
-    }
+    //Laser Power On
+    this.printPowerOn(out);
  
     //Print G01 movement code
     if(!gcodeG01Printed)
@@ -416,6 +418,35 @@ public class gCodeCutter extends LaserCutter
     
     prevX = x;
     prevY = y;
+  }
+  
+  private void printPowerOn ( PrintStream out)
+  {
+    //Update power if its value it is updated.
+    if( previousPower != currentPower)
+    {
+      previousPower = currentPower;
+      
+      if(this.supportsPower)
+        out.printf("%s%d\n", this.gcodeLaserOn, (int)(this.currentPower*100));
+      else
+        out.println(this.gcodeLaserOn);
+      
+      //If there is a Laser Delay on time
+      if(this.laserDelay != 0)
+        out.printf("%s%d\n", this.gcodeLaserDelay, (int)(this.laserDelay));
+        
+    }
+  }
+  
+  private void printPowerOff ( PrintStream out)
+  {
+    //Update power if its value it is updated.
+    if( previousPower != -1)
+    {
+      previousPower = -1;
+      out.println(this.gcodeLaserOff);
+    }
   }
 
   private float currentPower = -1;
@@ -469,6 +500,7 @@ public class gCodeCutter extends LaserCutter
     gcodeG01Printed = false;
     gcodeG00Printed = false;
     currentSpeed = -1;
+    laserDelay = 0;
     
     int i = 0;
     int max = job.getParts().size();
@@ -498,14 +530,23 @@ public class gCodeCutter extends LaserCutter
   {
     ByteArrayOutputStream result = new ByteArrayOutputStream();
     PrintStream out = new PrintStream(result, true, "US-ASCII");
-    gCodeEngraveProperty prop = vp.getCurrentCuttingProperty() instanceof gCodeEngraveProperty ? (gCodeEngraveProperty) vp.getCurrentCuttingProperty() : new gCodeEngraveProperty(vp.getCurrentCuttingProperty());
     
-    out.println("; Vector gCode ------------------------------------------------------");
+    gCodeEngraveProperty prop = vp.getCurrentCuttingProperty() instanceof gCodeEngraveProperty ? (gCodeEngraveProperty) vp.getCurrentCuttingProperty() : new gCodeEngraveProperty(vp.getCurrentCuttingProperty());
+    this.setCurrentProperty(out, prop);    
+    
+    out.println("; Line gCode ------------------------------------------------------");
     
     for( int x = 0 ; x < prop.getPasses(); x++)
     {
       if(prop.getPasses()>1)
         out.println(";--Pass number " + (x+1) + "--");
+      
+      //If multipasses ON and also Depth is not zero
+      if((prop.getPasses()>1)&&(x != 0)&&(prop.getPassesDepth() != 0.0))
+      {
+        this.printPowerOff(out);
+        out.printf("G91 Z%.4f G90\n", prop.getPassesDepth());
+      }
       
       for (VectorCommand cmd : vp.getCommandList())
       {
@@ -538,6 +579,7 @@ public class gCodeCutter extends LaserCutter
     
     gCodeEngraveProperty prop = rp.getLaserProperty() instanceof gCodeEngraveProperty ? (gCodeEngraveProperty) rp.getLaserProperty() : new gCodeEngraveProperty(rp.getLaserProperty());
     this.setCurrentProperty(out, prop);
+    
     float maxPower = this.currentPower;
     boolean bu = prop.isEngraveBottomUp();
     
@@ -545,6 +587,13 @@ public class gCodeCutter extends LaserCutter
     {
       if(prop.getPasses()>1)
         out.println(";--Pass number " + (x+1) + "--");
+      
+      //If multipasses ON and also Depth is not zero
+      if((prop.getPasses()>1)&&(x != 0)&&(prop.getPassesDepth() != 0.0))
+      {
+        this.printPowerOff(out);
+        out.printf("G91 Z%.4f G90\n", prop.getPassesDepth());
+      }
     
       boolean dirRight = true;
       Point rasterStart = rp.getRasterStart();
@@ -643,14 +692,21 @@ public class gCodeCutter extends LaserCutter
     out.println("; Raster gCode ------------------------------------------------------");
     
     gCodeEngraveProperty prop = rp.getLaserProperty() instanceof gCodeEngraveProperty ? (gCodeEngraveProperty) rp.getLaserProperty() : new gCodeEngraveProperty(rp.getLaserProperty());
-    
     this.setCurrentProperty(out, prop);
+    
     boolean bu = prop.isEngraveBottomUp();
     
     for( int x = 0 ; x < prop.getPasses(); x++)
     {
       if(prop.getPasses()>1)
         out.println(";--Pass number " + (x+1) + "--");
+      
+      //If multipasses ON and also Depth is not zero
+      if((prop.getPasses()>1)&&(x != 0)&&(prop.getPassesDepth() != 0.0))
+      {
+        this.printPowerOff(out);
+        out.printf("G91 Z%.4f G90\n", prop.getPassesDepth());
+      }
       
       Point rasterStart = rp.getRasterStart();
       boolean dirRight = true;
@@ -752,6 +808,7 @@ public class gCodeCutter extends LaserCutter
       }
       setSpeed(out, prop.getSpeed());
       setPower(prop.getPower());
+      this.laserDelay = prop.getLaserDelay();
     }
     else
     {
@@ -851,7 +908,7 @@ public class gCodeCutter extends LaserCutter
   @Override
   public String getModelName()
   {
-    return "Generic gCode driver";
+    return "gCode Driver - by Freakyattic";
   }
   
   public String getModelVersion()
@@ -859,4 +916,5 @@ public class gCodeCutter extends LaserCutter
     return "Ver. " + DRIVERVERSION;
   }
 }
+
 

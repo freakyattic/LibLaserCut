@@ -34,6 +34,8 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
   private float speed = 100;
   private boolean ventilation = true;
   private int passes = 1;
+  private float passesDepth = 0;
+  private int laserDelay = 0;
 
   public gCodeCutterProperty( boolean hideVentilation, boolean hideFocus)
   {
@@ -55,6 +57,8 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
       
     result.remove("frequency");
     result.add("passes");
+    result.add("passesDepth");
+    result.add("laserDelay");
     
     if (this.hideFocus)
     {
@@ -79,9 +83,17 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
     {
       return (int) this.getPasses();
     }
+    else if ("passesDepth".equals(name))
+    {
+      return (float) this.getPassesDepth();
+    }
     else if ("speed".equals(name))
     {
       return (Float) this.getSpeed();
+    }
+    else if ("laserDelay".equals(name))
+    {
+      return (int) this.getLaserDelay();
     }
     else
     {
@@ -100,9 +112,17 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
     {
       this.setPasses( (Integer) value);
     }
+    else if ("passesDepth".equals(name))
+    {
+      this.setPassesDepth((Float) value);
+    }
     else if ("speed".equals(name))
     {
       this.setSpeed((Float)value);
+    }
+    else if ("laserDelay".equals(name))
+    {
+      this.setLaserDelay((Integer)value);
     }
     else
     {
@@ -136,7 +156,13 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
         if (this.passes != other.passes) {
             return false;
         }
+        if (this.passesDepth != other.passesDepth) {
+            return false;
+        }
         if (this.speed != other.speed) {
+            return false;
+        }
+        if (this.laserDelay != other.laserDelay) {
             return false;
         }
         return super.equals(other);
@@ -153,8 +179,6 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
     @Override
     public void setSpeed(float speed)
     {
-      System.out.print ("Mierda " + speed);
-      
       speed = speed < 0 ? 0 : speed;
       speed = speed > 4000 ? 4000 : speed;
       this.speed = speed;
@@ -180,5 +204,26 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
     {      
       passes = passes < 1 ? 1 : passes;
       this.passes = passes;
+    }
+    
+    public float getPassesDepth()
+    {
+      return this.passesDepth;
+    }
+    
+    public void setPassesDepth(float depth)
+    {      
+      this.passesDepth = depth;
+    }
+    
+    public Integer getLaserDelay()
+    {
+      return this.laserDelay;
+    }
+    
+    public void setLaserDelay ( int delay)
+    {      
+      delay = delay < 0 ? 0 : delay;
+      this.laserDelay = delay;
     }
 }
