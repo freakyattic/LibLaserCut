@@ -64,7 +64,7 @@ import java.util.Locale;
 public class gCodeCutter extends LaserCutter
 {
 
-  private static final String DRIVERVERSION = "1.1";
+  private static final String DRIVERVERSION = "1.2";
   
   private static final String SETTING_OUTFILE = "gCode Output File";
   private static final String SETTING_BEDWIDTH = "Laserbed width";
@@ -90,14 +90,14 @@ public class gCodeCutter extends LaserCutter
   
   protected String outputFileName = "c:\\VisiCut_GCode.nc";
   
-  protected String gcodeHeader = "G90 ; Absolute distance\\nG21 ; Units in mm";
+  protected String gcodeHeader = "G90 ; Absolute distance\\nG21 ; Units in mm\\nG00 X0 Y0 Z0 ; All to home";
   protected String gcodeFooter = "M02";
   
   protected String gcodeVentOn  = "M106 ; Ventilation On";
   protected String gcodeVentOff = "M107 ; Ventilation Off";
   
-  protected String gcodeLaserOn  = "M171";
-  protected String gcodeLaserOff = "M170";
+  protected String gcodeLaserOn  = "M3 S";
+  protected String gcodeLaserOff = "M5";
   
   protected String gcodeLaserDelay = "G4 P0.";
   
@@ -138,12 +138,20 @@ public class gCodeCutter extends LaserCutter
     clone.outputFileName = outputFileName;
     clone.bedHeight = bedHeight;
     clone.bedWidth = bedWidth;
-    clone.addSpacePerRasterLine = addSpacePerRasterLine;
-    clone.supportsPower = supportsPower;
+    clone.mirrorXaxis = mirrorXaxis;
+    clone.mirrorYaxis = mirrorYaxis;
     clone.supportsVentilation = supportsVentilation;
-    clone.supportsFocus = supportsFocus;
+    clone.supportsPower = supportsPower;
+    clone.gcodeHeader = gcodeHeader;
+    clone.gcodeFooter = gcodeFooter;
     clone.gcodeVentOn = gcodeVentOn;
     clone.gcodeVentOff = gcodeVentOff;
+    clone.gcodeLaserOn = gcodeLaserOn;
+    clone.gcodeLaserOff = gcodeLaserOff;
+    clone.gcodeLaserDelay = gcodeLaserDelay;
+    
+    clone.addSpacePerRasterLine = addSpacePerRasterLine;
+    clone.supportsFocus = supportsFocus;
     return clone;
   }
   
