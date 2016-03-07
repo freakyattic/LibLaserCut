@@ -28,14 +28,13 @@ import java.util.LinkedList;
  */
 public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
   
-  private boolean hideVentilation = false;
-  private boolean hideFocus = false;
+  private boolean   hideVentilation = false;
+  private boolean   hideFocus       = false;
   
-  private float speed = 100;
-  private boolean ventilation = true;
-  private int passes = 1;
-  private float passesDepth = 0;
-  private int laserDelay = 0;
+  private float     speed         = 100;
+  private boolean   ventilation   = true;
+  private int       passes        = 1;
+  private float     passesDepth   = 0;
 
   public gCodeCutterProperty( boolean hideVentilation, boolean hideFocus)
   {
@@ -58,7 +57,6 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
     result.remove("frequency");
     result.add("passes");
     result.add("passesDepth");
-    result.add("laserDelay");
     
     if (this.hideFocus)
     {
@@ -91,10 +89,6 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
     {
       return (Float) this.getSpeed();
     }
-    else if ("laserDelay".equals(name))
-    {
-      return (int) this.getLaserDelay();
-    }
     else
     {
       return super.getProperty(name);
@@ -119,10 +113,6 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
     else if ("speed".equals(name))
     {
       this.setSpeed((Float)value);
-    }
-    else if ("laserDelay".equals(name))
-    {
-      this.setLaserDelay((Integer)value);
     }
     else
     {
@@ -160,9 +150,6 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
             return false;
         }
         if (this.speed != other.speed) {
-            return false;
-        }
-        if (this.laserDelay != other.laserDelay) {
             return false;
         }
         return super.equals(other);
@@ -214,16 +201,5 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
     public void setPassesDepth(float depth)
     {      
       this.passesDepth = depth;
-    }
-    
-    public Integer getLaserDelay()
-    {
-      return this.laserDelay;
-    }
-    
-    public void setLaserDelay ( int delay)
-    {      
-      delay = delay < 0 ? 0 : delay;
-      this.laserDelay = delay;
     }
 }

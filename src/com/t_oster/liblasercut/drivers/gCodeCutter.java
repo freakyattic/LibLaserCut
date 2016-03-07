@@ -36,10 +36,8 @@ import com.t_oster.liblasercut.platform.Point;
 import com.t_oster.liblasercut.platform.Util;
 import java.io.*;
 import java.text.SimpleDateFormat;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Calendar;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 
@@ -70,16 +68,23 @@ public class gCodeCutter extends LaserCutter
   private static final String SETTING_BEDWIDTH = "Laserbed width";
   private static final String SETTING_BEDHEIGHT = "Laserbed height";
   private static final String SETTING_RASTER_WHITESPACE = "Additional space per Raster line";
-  private static final String SETTING_SUPPORTS_VENTILATION = "Supports ventilation";
-  private static final String SETTING_SUPPORTS_POWER = "Supports Power Modulation";
+  
+  private static final String SETTING_RAPIDMOVE = "G0 Rapid Move Feedrate";
+  
   private static final String SETTING_SUPPORTS_FOCUS = "Supports focus (Z-axis movement)";
+    
   private static final String SETTING_GCODEHEADER = "gCode Start Header";
   private static final String SETTING_GCODEFOOTER = "gCode End Footer";
+  
+  private static final String SETTING_SUPPORTS_VENTILATION = "Supports ventilation";
   private static final String SETTING_GCODEVENTON = "gCode Vent. On";
   private static final String SETTING_GCODEVENTOFF = "gCode Vent. Off";
+  
+  private static final String SETTING_SUPPORTS_POWER = "Supports Power Modulation";
+  private static final String SETTING_ENABLE_GCODELASER = "Enable gCode Laser On/Off Strings";
   private static final String SETTING_GCODELASERON = "gCode Laser On";
   private static final String SETTING_GCODELASEROFF = "gCode Laser Off";
-  private static final String SETTING_GCODELASERDELAY = "gCode Laser ON Delay ";
+  
   private static final String SETTING_MIRRORXAXIS = "Mirror X Axis";
   private static final String SETTING_MIRRORYAXIS = "Mirror Y Axis";
   
@@ -88,67 +93,85 @@ public class gCodeCutter extends LaserCutter
 //        Properties
 //#############################################################################
   
-  protected String outputFileName = "c:\\VisiCut_GCode.nc";
+  protected String outputFileName = "c:\\VisiCut_GCode.gcode";
   
-  protected String gcodeHeader = "G90 ; Absolute distance\\nG21 ; Units in mm\\nG00 X0 Y0 Z0 ; All to home";
-  protected String gcodeFooter = "M02";
+  protected double FeedRate_RapidMoves = 1500;
   
-  protected String gcodeVentOn  = "M106 ; Ventilation On";
-  protected String gcodeVentOff = "M107 ; Ventilation Off";
+  protected String  gcodeHeader = "G90 ; Absolute distance\\nG21 ; Units in mm";
+  protected String  gcodeFooter = "M02 ; End of program";
   
-  protected String gcodeLaserOn  = "M3 S";
-  protected String gcodeLaserOff = "M5";
+  protected String  gcodeVentOn  = "M106 ; Ventilation On";
+  protected String  gcodeVentOff = "M107 ; Ventilation Off";
   
-  protected String gcodeLaserDelay = "G4 P0.";
+  private boolean   supportsPower = true;
+  private boolean   gcodeLaserOnOff_Enable = true;
+  protected String  gcodeLaserOn  = "M3";
+  protected String  gcodeLaserOff = "M5 ; Laser off";
   
-  protected double bedWidth = 300;
-  protected double bedHeight = 210;
+  protected double  bedWidth  = 300;
+  protected double  bedHeight = 210;
   
   protected boolean mirrorXaxis = false;
   protected boolean mirrorYaxis = true;
   
-  private boolean supportsPower = true;
-  private boolean supportsFocus = false;
-  private boolean supportsVentilation = false;
-  private double  addSpacePerRasterLine = 0;
+  
+  private boolean   supportsFocus = false;
+  private boolean   supportsVentilation = false;
+  private double    addSpacePerRasterLine = 0;
   
   private static String[] settingAttributes = new String[]{
+    
     SETTING_OUTFILE,
+    
     SETTING_BEDWIDTH,
     SETTING_BEDHEIGHT,
+    
     SETTING_MIRRORXAXIS,
     SETTING_MIRRORYAXIS,
-    SETTING_SUPPORTS_VENTILATION,
     //SETTING_SUPPORTS_FOCUS,
-    SETTING_SUPPORTS_POWER,
     //SETTING_RASTER_WHITESPACE,
+    
+    SETTING_RAPIDMOVE,
+    
     SETTING_GCODEHEADER,
     SETTING_GCODEFOOTER,
-    SETTING_GCODEVENTON,
-    SETTING_GCODEVENTOFF,
+    
+    SETTING_SUPPORTS_POWER,
+    SETTING_ENABLE_GCODELASER,
     SETTING_GCODELASERON,
     SETTING_GCODELASEROFF,
-    SETTING_GCODELASERDELAY,
+    
+    SETTING_SUPPORTS_VENTILATION,
+    SETTING_GCODEVENTON,
+    SETTING_GCODEVENTOFF,
   };
 
   @Override
   public LaserCutter clone()
   {
     gCodeCutter clone = new gCodeCutter();
+    
     clone.outputFileName = outputFileName;
+    
     clone.bedHeight = bedHeight;
     clone.bedWidth = bedWidth;
-    clone.mirrorXaxis = mirrorXaxis;
-    clone.mirrorYaxis = mirrorYaxis;
-    clone.supportsVentilation = supportsVentilation;
-    clone.supportsPower = supportsPower;
+    
+    clone.FeedRate_RapidMoves = FeedRate_RapidMoves;
+    
     clone.gcodeHeader = gcodeHeader;
     clone.gcodeFooter = gcodeFooter;
+    
+    clone.supportsVentilation = supportsVentilation;
     clone.gcodeVentOn = gcodeVentOn;
     clone.gcodeVentOff = gcodeVentOff;
+    
+    clone.supportsPower = supportsPower;
+    clone.gcodeLaserOnOff_Enable = gcodeLaserOnOff_Enable;
     clone.gcodeLaserOn = gcodeLaserOn;
     clone.gcodeLaserOff = gcodeLaserOff;
-    clone.gcodeLaserDelay = gcodeLaserDelay;
+    
+    clone.mirrorXaxis = mirrorXaxis;
+    clone.mirrorYaxis = mirrorYaxis;
     
     clone.addSpacePerRasterLine = addSpacePerRasterLine;
     clone.supportsFocus = supportsFocus;
@@ -172,18 +195,7 @@ public class gCodeCutter extends LaserCutter
     {
       return (Double) this.addSpacePerRasterLine;
     }
-    else if (SETTING_SUPPORTS_POWER.equals(attribute))
-    {
-      return (Boolean) this.supportsPower;
-    }
-    else if (SETTING_SUPPORTS_VENTILATION.equals(attribute))
-    {
-      return (Boolean) this.supportsVentilation;
-    }
-    else if (SETTING_SUPPORTS_FOCUS.equals(attribute))
-    {
-      return (Boolean) this.supportsFocus;
-    }
+
     else if (SETTING_BEDWIDTH.equals(attribute))
     {
       return (Double) this.bedWidth;
@@ -192,6 +204,17 @@ public class gCodeCutter extends LaserCutter
     {
       return (Double) this.bedHeight;
     }
+    
+    else if (SETTING_RAPIDMOVE.equals(attribute))
+    {
+      return (Double) this.FeedRate_RapidMoves;
+    }
+    
+    else if (SETTING_SUPPORTS_FOCUS.equals(attribute))
+    {
+      return (Boolean) this.supportsFocus;
+    }
+    
     else if (SETTING_MIRRORXAXIS.equals(attribute))
     {
       return (Boolean) this.mirrorXaxis;
@@ -200,6 +223,7 @@ public class gCodeCutter extends LaserCutter
     {
       return (Boolean) this.mirrorYaxis;
     }
+    
     else if (SETTING_GCODEHEADER.equals(attribute))
     {
       return (String) this.gcodeHeader;
@@ -207,6 +231,12 @@ public class gCodeCutter extends LaserCutter
     else if (SETTING_GCODEFOOTER.equals(attribute))
     {
       return (String) this.gcodeFooter;
+    }
+    
+//Ventilation    
+    else if (SETTING_SUPPORTS_VENTILATION.equals(attribute))
+    {
+      return (Boolean) this.supportsVentilation;
     }
     else if (SETTING_GCODEVENTON.equals(attribute))
     {
@@ -216,6 +246,16 @@ public class gCodeCutter extends LaserCutter
     {
       return (String) this.gcodeVentOff;
     }
+    
+//Laser On/off    
+    else if (SETTING_SUPPORTS_POWER.equals(attribute))
+    {
+      return (Boolean) this.supportsPower;
+    }
+    else if (SETTING_ENABLE_GCODELASER.equals(attribute))
+    {
+      return (Boolean) this.gcodeLaserOnOff_Enable;
+    }
     else if (SETTING_GCODELASERON.equals(attribute))
     {
       return (String) this.gcodeLaserOn;
@@ -224,10 +264,7 @@ public class gCodeCutter extends LaserCutter
     {
       return (String) this.gcodeLaserOff;
     }
-    else if (SETTING_GCODELASERDELAY.equals(attribute))
-    {
-      return (String) this.gcodeLaserDelay;
-    }
+    
     return null;
   }
 
@@ -242,14 +279,13 @@ public class gCodeCutter extends LaserCutter
     {
       this.addSpacePerRasterLine = (Double) value;
     }
-    else if (SETTING_SUPPORTS_POWER.equals(attribute))
+
+    else if (SETTING_RAPIDMOVE.equals(attribute))
     {
-      this.supportsPower = (Boolean) value;
+      this.FeedRate_RapidMoves = (Double) value;
     }
-    else if (SETTING_SUPPORTS_VENTILATION.equals(attribute))
-    {
-      this.supportsVentilation = (Boolean) value;
-    }
+    
+    
     else if (SETTING_SUPPORTS_FOCUS.equals(attribute))
     {
       this.supportsFocus = (Boolean) value;
@@ -278,6 +314,12 @@ public class gCodeCutter extends LaserCutter
     {
       this.gcodeFooter = (String) value;
     }
+    
+//Ventilation    
+    else if (SETTING_SUPPORTS_VENTILATION.equals(attribute))
+    {
+      this.supportsVentilation = (Boolean) value;
+    }
     else if (SETTING_GCODEVENTON.equals(attribute))
     {
       this.gcodeVentOn = (String) value;
@@ -286,6 +328,16 @@ public class gCodeCutter extends LaserCutter
     {
       this.gcodeVentOff = (String) value;
     }
+    
+// Laser On/Off    
+    else if (SETTING_SUPPORTS_POWER.equals(attribute))
+    {
+      this.supportsPower = (Boolean) value;
+    }
+    else if (SETTING_ENABLE_GCODELASER.equals(attribute))
+    {
+      this.gcodeLaserOnOff_Enable = (Boolean) value;
+    }
     else if (SETTING_GCODELASERON.equals(attribute))
     {
       this.gcodeLaserOn = (String) value;
@@ -293,10 +345,6 @@ public class gCodeCutter extends LaserCutter
     else if (SETTING_GCODELASEROFF.equals(attribute))
     {
       this.gcodeLaserOff = (String) value;
-    }
-    else if (SETTING_GCODELASERDELAY.equals(attribute))
-    {
-      this.gcodeLaserDelay = (String) value;
     }
   }
 
@@ -354,10 +402,8 @@ public class gCodeCutter extends LaserCutter
 
   private float previousPower = -1;
   
-  private boolean gcodeG00Printed = false;
-  private boolean gcodeG01Printed = false;
-  
-  private int laserDelay = 0;
+  private boolean gcodeG00_F_Printed = false;
+  private boolean gcodeG01_F_Printed = false;
   
   private void move(PrintStream out, double x, double y)
   {
@@ -372,27 +418,28 @@ public class gCodeCutter extends LaserCutter
     //Update power if its value it is updated.
     this.printPowerOff(out);
     
-    //Print G00 movement code
-    if(!gcodeG00Printed)
-    {
-      out.print("G00 ");
-      gcodeG00Printed = true;
-      gcodeG01Printed = false;
-    }  
+    out.print("G00");
     
     if(prevX != x)
-      out.printf("X%.4f ", x);
+      out.printf(" X%.4f ", x);
     
     if(prevY != y)
-      out.printf("Y%.4f", y);
+      out.printf(" Y%.4f", y);
+    
+    if (!gcodeG00_F_Printed )
+    {
+      gcodeG00_F_Printed = true;
+      gcodeG01_F_Printed = false;
+      out.printf(" F%d", (int) (this.FeedRate_RapidMoves));
+    }
     
     out.print("\n"); //end of line
     
     prevX = x;
     prevY = y;
   }
-
-  private void line(PrintStream out, double x, double y)
+  
+  private void line(PrintStream out, double x, double y, int feedRate)
   {
     //Mirror Axis
     if(mirrorXaxis)
@@ -404,46 +451,52 @@ public class gCodeCutter extends LaserCutter
     if((prevX == x)&&(prevY ==y))
       return;
     
-    //Laser Power On
-    this.printPowerOn(out);
- 
-    //Print G01 movement code
-    if(!gcodeG01Printed)
+//Laser Power On Gcode -----------------------------------------
+    if(gcodeLaserOnOff_Enable)
     {
-      out.print("G01 ");
-      gcodeG00Printed = false;
-      gcodeG01Printed = true;
-    }  
+      if( previousPower != currentPower)
+      {
+        previousPower = currentPower;
+
+        if(this.supportsPower)
+          out.printf("%s S%d\n", this.gcodeLaserOn, (int)(this.currentPower));
+        else
+          out.println(this.gcodeLaserOn);
+      }
+    }    
+ 
+//GCODE - G01  --------------------------------------------
+    
+    out.print("G01");
     
     if(prevX != x)
-      out.printf("X%.4f ", x);
+      out.printf(" X%.4f ", x);
     
     if(prevY != y)
-      out.printf("Y%.4f", y);
+      out.printf(" Y%.4f", y);
+    
+    //Feed rate
+    if (!gcodeG01_F_Printed )
+    {
+      gcodeG01_F_Printed = true;
+      gcodeG00_F_Printed = false;
+      out.printf(" F%d", (int) (feedRate));
+    }
+    
+    //if gcode On/off strings disabled add power modulation.
+    if((!gcodeLaserOnOff_Enable)&&(this.supportsPower))
+    {
+      if( previousPower != currentPower)
+      {
+        previousPower = currentPower;
+        out.printf(" S%d", (int)(this.currentPower));
+      }
+    }
     
     out.print("\n"); //end of line
     
     prevX = x;
     prevY = y;
-  }
-  
-  private void printPowerOn ( PrintStream out)
-  {
-    //Update power if its value it is updated.
-    if( previousPower != currentPower)
-    {
-      previousPower = currentPower;
-      
-      if(this.supportsPower)
-        out.printf("%s%d\n", this.gcodeLaserOn, (int)(this.currentPower*100));
-      else
-        out.println(this.gcodeLaserOn);
-      
-      //If there is a Laser Delay on time
-      if(this.laserDelay != 0)
-        out.printf("%s%d\n", this.gcodeLaserDelay, (int)(this.laserDelay));
-        
-    }
   }
   
   private void printPowerOff ( PrintStream out)
@@ -452,7 +505,9 @@ public class gCodeCutter extends LaserCutter
     if( previousPower != -1)
     {
       previousPower = -1;
-      out.println(this.gcodeLaserOff);
+      
+      if(this.gcodeLaserOnOff_Enable)
+        out.println(this.gcodeLaserOff);
     }
   }
 
@@ -460,16 +515,6 @@ public class gCodeCutter extends LaserCutter
   private void setPower(float power)
   {
     currentPower = power;
-  }
-
-  private float currentSpeed = -1;
-  private void setSpeed(PrintStream out, float speed)
-  {
-    if (currentSpeed != speed)
-    {
-      out.printf("F%d ;Feed Rate\n", (int) (speed));
-      currentSpeed = speed;
-    }
   }
 
   private float currentFocus = 0;
@@ -504,10 +549,8 @@ public class gCodeCutter extends LaserCutter
     prevX = -1;
     prevY = -1;
     previousPower = -1;
-    gcodeG01Printed = false;
-    gcodeG00Printed = false;
-    currentSpeed = -1;
-    laserDelay = 0;
+    gcodeG00_F_Printed = false;
+    gcodeG01_F_Printed = false;
     
     int i = 0;
     int max = job.getParts().size();
@@ -563,7 +606,7 @@ public class gCodeCutter extends LaserCutter
             move(out, Util.px2mm(cmd.getX(), resolution), Util.px2mm(cmd.getY(), resolution));
             break;
           case LINETO:
-            line(out, Util.px2mm(cmd.getX(), resolution), Util.px2mm(cmd.getY(), resolution));
+            line(out, Util.px2mm(cmd.getX(), resolution), Util.px2mm(cmd.getY(), resolution), (int) prop.getSpeed());
             break;
           case SETPROPERTY:
           {
@@ -573,6 +616,9 @@ public class gCodeCutter extends LaserCutter
         }
       }
     }
+    
+    if(this.gcodeLaserOnOff_Enable)    //Print power off - For Safety
+      out.println(this.gcodeLaserOff);
     
     return result.toByteArray();
   }
@@ -643,14 +689,14 @@ public class gCodeCutter extends LaserCutter
                 else
                 {
                   setPower(maxPower * (0xFF & old) / 255);
-                  line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
+                  line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
                 }
                 old = bytes.get(pix);
               }
             }
             //last point is also not "white"
             setPower(maxPower * (0xFF & bytes.get(bytes.size() - 1)) / 255);
-            line(out, Util.px2mm(lineStart.x + bytes.size() - 1, resolution), Util.px2mm(lineStart.y, resolution));
+            line(out, Util.px2mm(lineStart.x + bytes.size() - 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
           }
           else
           {
@@ -668,14 +714,14 @@ public class gCodeCutter extends LaserCutter
                 else
                 {
                   setPower( maxPower * (0xFF & old) / 255);
-                  line(out, Util.px2mm(lineStart.x + pix + 1, resolution), Util.px2mm(lineStart.y, resolution));
+                  line(out, Util.px2mm(lineStart.x + pix + 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
                 }
                 old = bytes.get(pix);
               }
             }
             //last point is also not "white"
             setPower(maxPower * (0xFF & bytes.get(0)) / 255);
-            line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
+            line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
           }
         }
         if (!prop.isEngraveUnidirectional())
@@ -686,8 +732,8 @@ public class gCodeCutter extends LaserCutter
       
     } //end of passes
     
-    //Print power off - For Safety
-    out.println(this.gcodeLaserOff);
+    if(this.gcodeLaserOnOff_Enable)    //Print power off - For Safety
+      out.println(this.gcodeLaserOff);
     
     return result.toByteArray();
   }
@@ -736,7 +782,7 @@ public class gCodeCutter extends LaserCutter
               if (old == false)
                 move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
               else
-                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
+                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
 
               old = rp.isBlack(pix, line);
             }
@@ -745,7 +791,7 @@ public class gCodeCutter extends LaserCutter
           //Last point
           if((old == true) && (rp.isBlack(rp.getRasterWidth() - 1, line) == true))
           {
-            line(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution));
+            line(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
           }        
         }
         else
@@ -761,7 +807,7 @@ public class gCodeCutter extends LaserCutter
               if (old == false)
                 move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
               else
-                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution));
+                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
 
               old = rp.isBlack(pix, line);
             }
@@ -770,7 +816,7 @@ public class gCodeCutter extends LaserCutter
           //Last point
           if((old == true) && (rp.isBlack(0, line) == true))
           {
-            line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
+            line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
           }
 
         }
@@ -794,8 +840,8 @@ public class gCodeCutter extends LaserCutter
       
     }//End of passes
 
-    //Print power off - For Safety
-    out.println(this.gcodeLaserOff);
+    if(this.gcodeLaserOnOff_Enable)    //Print power off - For Safety
+      out.println(this.gcodeLaserOff);
 
     return result.toByteArray();
   }
@@ -813,9 +859,8 @@ public class gCodeCutter extends LaserCutter
       {
         setVentilation(out, prop.getVentilation());
       }
-      setSpeed(out, prop.getSpeed());
+      //TODO setSpeed(out, prop.getSpeed());
       setPower(prop.getPower());
-      this.laserDelay = prop.getLaserDelay();
     }
     else
     {
@@ -836,7 +881,8 @@ public class gCodeCutter extends LaserCutter
     out.println(";\n;");
     out.println(this.gcodeHeader.replace("\\n","\n").replace("\\r", "\r"));
     
-    out.println(this.gcodeLaserOff);
+    if(this.gcodeLaserOnOff_Enable)    //Print power off - For Safety
+      out.println(this.gcodeLaserOff);
     
     return result.toByteArray();
   }
@@ -846,7 +892,8 @@ public class gCodeCutter extends LaserCutter
     ByteArrayOutputStream result = new ByteArrayOutputStream();
     PrintStream out = new PrintStream(result, true, "US-ASCII");
     
-    out.println(this.gcodeLaserOff);
+    if(this.gcodeLaserOnOff_Enable)    //Print power off - For Safety
+      out.println(this.gcodeLaserOff); 
     
     this.setFocus(out, 0f);
     this.setVentilation(out, false);
@@ -862,7 +909,6 @@ public class gCodeCutter extends LaserCutter
   public void sendJob(LaserJob job, ProgressListener pl, List<String> warnings) throws IllegalJobException, Exception
   {
     currentPower = -1;
-    currentSpeed = -1;
     currentFocus = 0;
     currentVentilation = false;
     
@@ -888,7 +934,7 @@ public class gCodeCutter extends LaserCutter
 
     pl.taskChanged(this, "Finished");
 
-    pl.progressChanged(this, 100);
+    pl.progressChanged(this, 100);   
   }
   
 //only kept for backwards compatibility. unused
