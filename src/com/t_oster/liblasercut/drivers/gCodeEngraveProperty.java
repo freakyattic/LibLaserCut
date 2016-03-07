@@ -30,13 +30,21 @@ import java.util.LinkedList;
 public class gCodeEngraveProperty extends gCodeCutterProperty
 {
   
+  private static final String BOTTOM_UP = "engrave bottom up";
+  private static final String UNIDIRECTIONAL = "engrave unidirectional";
+
+  private boolean engraveBottomUp = false;
+  private boolean engraveUnidirectional = false;
+  
   public gCodeEngraveProperty( boolean hideVentilation, boolean hideFocus)
   {
     super(hideVentilation, hideFocus);
   }
   
   public gCodeEngraveProperty()
-  {};
+  {
+    
+  }
   
   public gCodeEngraveProperty(LaserProperty o)
   {
@@ -51,15 +59,12 @@ public class gCodeEngraveProperty extends gCodeCutterProperty
       }
     }
   }
-  
-  private static final String BOTTOM_UP = "engrave bottom up";
-  private boolean engraveBottomUp = false;
+ 
   public boolean isEngraveBottomUp()
   {
     return engraveBottomUp;
   }
-  private static final String UNIDIRECTIONAL = "engrave unidirectional";
-  private boolean engraveUnidirectional = false;
+  
   public boolean isEngraveUnidirectional()
   {
     return engraveUnidirectional;
@@ -107,6 +112,35 @@ public class gCodeEngraveProperty extends gCodeCutterProperty
     {
       super.setProperty(name, value);
     }
+  }
+  
+  @Override
+  public gCodeCutterProperty clone()
+  {
+    gCodeEngraveProperty result = new gCodeEngraveProperty();
+    for (String s:this.getPropertyKeys())
+    {
+      result.setProperty(s, this.getProperty(s));
+    }
+    return result;
+  }
+  
+  @Override
+  public boolean equals(Object obj) {
+    if (obj == null) {
+        return false;
+    }
+    if (getClass() != obj.getClass()) {
+        return false;
+    }
+    final gCodeEngraveProperty other = (gCodeEngraveProperty) obj;
+    if (this.engraveBottomUp != other.engraveBottomUp) {
+        return false;
+    }
+    if (this.engraveUnidirectional != other.engraveUnidirectional) {
+        return false;
+    }
+    return super.equals(other);
   }
   
 }

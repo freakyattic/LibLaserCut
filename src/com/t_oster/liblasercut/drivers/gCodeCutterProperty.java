@@ -41,11 +41,13 @@ public class gCodeCutterProperty extends FloatPowerSpeedFocusFrequencyProperty {
     //this.hidePurge = hidePurge;
     this.hideVentilation = hideVentilation;
     this.hideFocus = hideFocus;
+    this.setPower(100);
   }
   
   public gCodeCutterProperty()
   {
     this( false, false);
+    
   }
   
   @Override

@@ -541,47 +541,13 @@ public class gCodeCutter extends LaserCutter
     }
   }
 
-  protected void writeJobCode(LaserJob job, OutputStream out, ProgressListener pl) throws UnsupportedEncodingException, IOException
-  {
-    out.write(this.generateInitializationCode( job ));
-    pl.progressChanged(this, 20);
-    
-    prevX = -1;
-    prevY = -1;
-    previousPower = -1;
-    gcodeG00_F_Printed = false;
-    gcodeG01_F_Printed = false;
-    
-    int i = 0;
-    int max = job.getParts().size();
-    
-    for (JobPart p : job.getParts())
-    {
-      if (p instanceof Raster3dPart)
-      {
-        out.write(this.generatePseudoRaster3dGCode((Raster3dPart) p, p.getDPI()));
-      }
-      else if (p instanceof RasterPart)
-      {
-        out.write(this.generategCodeRasterCode((RasterPart) p, p.getDPI()));
-      }
-      else if (p instanceof VectorPart)
-      {
-        out.write(this.generateVectorGCode((VectorPart) p, p.getDPI()));
-      }
-      i++;
-      pl.progressChanged(this, 20 + (int) (i*(double) 60/max));
-    }
-    out.write(this.generateShutdownCode());
-    out.close();
-  }
-  
   private byte[] generateVectorGCode(VectorPart vp, double resolution) throws UnsupportedEncodingException
   {
     ByteArrayOutputStream result = new ByteArrayOutputStream();
     PrintStream out = new PrintStream(result, true, "US-ASCII");
-    
+
     gCodeEngraveProperty prop = vp.getCurrentCuttingProperty() instanceof gCodeEngraveProperty ? (gCodeEngraveProperty) vp.getCurrentCuttingProperty() : new gCodeEngraveProperty(vp.getCurrentCuttingProperty());
+
     this.setCurrentProperty(out, prop);    
     
     out.println("; Line gCode ------------------------------------------------------");
@@ -623,8 +589,116 @@ public class gCodeCutter extends LaserCutter
     return result.toByteArray();
   }
 
+  private byte[] generategCodeRasterCode(RasterPart rp, double resolution) throws UnsupportedEncodingException, IOException
+  {
+    ByteArrayOutputStream result = new ByteArrayOutputStream();
+    PrintStream out = new PrintStream(result, true, "US-ASCII");
+    out.println("; Raster gCode ------------------------------------------------------");
+    
+    //gCodeEngraveProperty prop = rp.getLaserProperty() instanceof gCodeEngraveProperty ? (gCodeEngraveProperty) rp.getLaserProperty() : new gCodeEngraveProperty(rp.getLaserProperty());
+    gCodeEngraveProperty prop = (gCodeEngraveProperty) rp.getLaserProperty();
+    this.setCurrentProperty(out, prop);
+    
+    boolean bu = prop.isEngraveBottomUp();
+    
+    for( int x = 0 ; x < prop.getPasses(); x++)
+    {
+      if(prop.getPasses()>1)
+        out.println(";--Pass number " + (x+1) + "--");
+      
+      //If multipasses ON and also Depth is not zero
+      if((prop.getPasses()>1)&&(x != 0)&&(prop.getPassesDepth() != 0.0))
+      {
+        this.printPowerOff(out);
+        out.printf("G91 Z%.4f G90\n", prop.getPassesDepth());
+      }
+      
+      Point rasterStart = rp.getRasterStart();
+      boolean dirRight = true;
+
+      for (int line = bu ? rp.getRasterHeight()-1 : 0; bu ? line >= 0 : line < rp.getRasterHeight(); line += bu ? -1 : 1)
+      {
+        Point lineStart = rasterStart.clone();
+        lineStart.y += line;
+
+        if (dirRight)
+        {
+          //move to the first point of the line
+          move(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
+
+          boolean old = rp.isBlack(0, line);
+          for (int pix = 0; pix < rp.getRasterWidth() - 1; pix++)
+          {
+            if (rp.isBlack(pix, line) != old)
+            {
+              if (old == false)
+                move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
+              else
+                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
+
+              old = rp.isBlack(pix, line);
+            }
+          }
+
+          //Last point
+          if((old == true) && (rp.isBlack(rp.getRasterWidth() - 1, line) == true))
+          {
+            line(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
+          }        
+        }
+        else
+        {
+          //move to the last point of the line
+          move(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution) );
+
+          boolean old = rp.isBlack(0, line);
+          for (int pix = rp.getRasterWidth() - 1; pix >= 0; pix--)
+          {
+            if (rp.isBlack(pix, line) != old)
+            {
+              if (old == false)
+                move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
+              else
+                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
+
+              old = rp.isBlack(pix, line);
+            }
+          }
+
+          //Last point
+          if((old == true) && (rp.isBlack(0, line) == true))
+          {
+            line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
+          }
+
+        }
+
+        if (!prop.isEngraveUnidirectional())
+        {
+          dirRight = !dirRight;
+        }
+
+  //      //Test to print in the System output the image
+  //      for ( int x = 0; x < rp.getRasterWidth(); x++)
+  //      {
+  //        if(rp.isBlack(x, line))
+  //          System.out.print("1");
+  //        else
+  //          System.out.print(" ");
+  //      }
+  //      System.out.print("\n");
+
+      }
+      
+    }//End of passes
+
+    if(this.gcodeLaserOnOff_Enable)    //Print power off - For Safety
+      out.println(this.gcodeLaserOff);
+
+    return result.toByteArray();
+  }
   
-  private byte[] generatePseudoRaster3dGCode(Raster3dPart rp, double resolution) throws UnsupportedEncodingException
+   private byte[] generatePseudoRaster3dGCode(Raster3dPart rp, double resolution) throws UnsupportedEncodingException
   {
     ByteArrayOutputStream result = new ByteArrayOutputStream();
     PrintStream out = new PrintStream(result, true, "US-ASCII");
@@ -738,113 +812,6 @@ public class gCodeCutter extends LaserCutter
     return result.toByteArray();
   }
 
-  private byte[] generategCodeRasterCode(RasterPart rp, double resolution) throws UnsupportedEncodingException, IOException
-  {
-    ByteArrayOutputStream result = new ByteArrayOutputStream();
-    PrintStream out = new PrintStream(result, true, "US-ASCII");
-    out.println("; Raster gCode ------------------------------------------------------");
-    
-    gCodeEngraveProperty prop = rp.getLaserProperty() instanceof gCodeEngraveProperty ? (gCodeEngraveProperty) rp.getLaserProperty() : new gCodeEngraveProperty(rp.getLaserProperty());
-    this.setCurrentProperty(out, prop);
-    
-    boolean bu = prop.isEngraveBottomUp();
-    
-    for( int x = 0 ; x < prop.getPasses(); x++)
-    {
-      if(prop.getPasses()>1)
-        out.println(";--Pass number " + (x+1) + "--");
-      
-      //If multipasses ON and also Depth is not zero
-      if((prop.getPasses()>1)&&(x != 0)&&(prop.getPassesDepth() != 0.0))
-      {
-        this.printPowerOff(out);
-        out.printf("G91 Z%.4f G90\n", prop.getPassesDepth());
-      }
-      
-      Point rasterStart = rp.getRasterStart();
-      boolean dirRight = true;
-
-      for (int line = bu ? rp.getRasterHeight()-1 : 0; bu ? line >= 0 : line < rp.getRasterHeight(); line += bu ? -1 : 1)
-      {
-        Point lineStart = rasterStart.clone();
-        lineStart.y += line;
-
-        if (dirRight)
-        {
-          //move to the first point of the line
-          move(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution));
-
-          boolean old = rp.isBlack(0, line);
-          for (int pix = 0; pix < rp.getRasterWidth() - 1; pix++)
-          {
-            if (rp.isBlack(pix, line) != old)
-            {
-              if (old == false)
-                move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
-              else
-                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
-
-              old = rp.isBlack(pix, line);
-            }
-          }
-
-          //Last point
-          if((old == true) && (rp.isBlack(rp.getRasterWidth() - 1, line) == true))
-          {
-            line(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
-          }        
-        }
-        else
-        {
-          //move to the last point of the line
-          move(out, Util.px2mm(lineStart.x + rp.getRasterWidth() - 1, resolution), Util.px2mm(lineStart.y, resolution) );
-
-          boolean old = rp.isBlack(0, line);
-          for (int pix = rp.getRasterWidth() - 1; pix >= 0; pix--)
-          {
-            if (rp.isBlack(pix, line) != old)
-            {
-              if (old == false)
-                move(out, Util.px2mm(lineStart.x + pix, resolution), Util.px2mm(lineStart.y, resolution));
-              else
-                line(out, Util.px2mm(lineStart.x + pix - 1, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
-
-              old = rp.isBlack(pix, line);
-            }
-          }
-
-          //Last point
-          if((old == true) && (rp.isBlack(0, line) == true))
-          {
-            line(out, Util.px2mm(lineStart.x, resolution), Util.px2mm(lineStart.y, resolution), (int) prop.getSpeed());
-          }
-
-        }
-
-        if (!prop.isEngraveUnidirectional())
-        {
-          dirRight = !dirRight;
-        }
-
-  //      //Test to print in the System output the image
-  //      for ( int x = 0; x < rp.getRasterWidth(); x++)
-  //      {
-  //        if(rp.isBlack(x, line))
-  //          System.out.print("1");
-  //        else
-  //          System.out.print(" ");
-  //      }
-  //      System.out.print("\n");
-
-      }
-      
-    }//End of passes
-
-    if(this.gcodeLaserOnOff_Enable)    //Print power off - For Safety
-      out.println(this.gcodeLaserOff);
-
-    return result.toByteArray();
-  }
   
   private void setCurrentProperty(PrintStream out, LaserProperty p)
   {
@@ -936,7 +903,52 @@ public class gCodeCutter extends LaserCutter
 
     pl.progressChanged(this, 100);   
   }
+
+  protected void writeJobCode(LaserJob job, OutputStream out, ProgressListener pl) throws UnsupportedEncodingException, IOException
+  {
+    out.write(this.generateInitializationCode( job ));
+    
+    if(pl != null)
+      pl.progressChanged(this, 20);
+    
+    prevX = -1;
+    prevY = -1;
+    previousPower = -1;
+    gcodeG00_F_Printed = false;
+    gcodeG01_F_Printed = false;
+    
+    int i = 0;
+    int max = job.getParts().size();
+    
+    for (JobPart p : job.getParts())
+    {
+      if (p instanceof Raster3dPart)
+      {
+        out.write(this.generatePseudoRaster3dGCode((Raster3dPart) p, p.getDPI()));
+      }
+      else if (p instanceof RasterPart)
+      {
+        out.write(this.generategCodeRasterCode((RasterPart) p, p.getDPI()));
+      }
+      else if (p instanceof VectorPart)
+      {
+        out.write(this.generateVectorGCode((VectorPart) p, p.getDPI()));
+      }
+      i++;
+      
+      if(pl != null)
+        pl.progressChanged(this, 20 + (int) (i*(double) 60/max));
+    }
+    out.write(this.generateShutdownCode());
+    out.close();
+  }
   
+  @Override
+  public void saveJob(java.io.PrintStream fileOutputStream, LaserJob job) throws IllegalJobException, Exception {
+      
+      writeJobCode( job, fileOutputStream, null);
+  }
+    
 //only kept for backwards compatibility. unused
   private transient boolean unidir = false;
   
