@@ -46,7 +46,12 @@ public class LibInfo
       IModelaMill.class,
       SampleDriver.class,
       ExportSVG.class,
-      gCodeCutter.class
+      MakeBlockXYPlotter.class,
+      GenericGcodeDriver.class,
+      Grbl.class,
+      SmoothieBoard.class,
+      Marlin.class,
+      gCodeCutter.class,
     };
   }
 }

@@ -22,7 +22,10 @@
  */
 package com.t_oster.liblasercut;
 
+import com.t_oster.liblasercut.platform.Point;
 import com.t_oster.liblasercut.platform.Util;
+import java.io.PrintStream;
+
 import java.util.LinkedList;
 import java.util.List;
 
@@ -78,6 +81,11 @@ public abstract class LaserCutter implements Cloneable, Customizable {
      * @throws Exception  if there is a Problem with the Communication or Queue
      */
     public abstract void sendJob(LaserJob job, ProgressListener pl, List<String> warnings) throws IllegalJobException, Exception;
+
+    public void saveJob(PrintStream fileOutputStream, LaserJob job) throws UnsupportedOperationException, IllegalJobException, Exception {
+        System.err.println("Your driver does not implement saveJob(LaserJob job)");
+        throw new UnsupportedOperationException("Your driver does not implement saveJob(LaserJob job)");
+    }
 
     /**
      * If you lasercutter supports autofocus, override this method,
@@ -173,6 +181,76 @@ public abstract class LaserCutter implements Cloneable, Customizable {
 
     public abstract String getModelName();
 
+    /**
+     * Converts a raster image (B&W or greyscale) into a series of vector
+     * instructions suitable for printing. Lets non-raster-native cutters
+     * emulate this functionality using gcode.
+     * @param rp the raster job to convert
+     * @param resolution resolution to output job at
+     * @param bidirectional cut in both directions
+     * @return a VectorPart job of VectorCommands
+     */
+    protected VectorPart convertRasterizableToVectorPart(RasterizableJobPart rp, double resolution, boolean bidirectional)
+    {
+      VectorPart result = new VectorPart(rp.getLaserProperty(), resolution);
+      for (int y = 0; y < rp.getRasterHeight(); y++)
+      {
+        if (rp.lineIsBlank(y) == false)
+        {
+          Point lineStart = rp.getStartPosition(y);
+          
+          //move to the first point of the line
+          result.moveto(lineStart.x + rp.firstNonWhitePixel(y)+rp.cutCompensation(), lineStart.y);
+          
+          for (int x = rp.firstNonWhitePixel(y); !rp.hasFinishedCuttingLine(x, y);)
+          {
+            result.setProperty(rp.getPowerSpeedFocusPropertyForPixel(x, y));
+            x = rp.nextColorChange(x, y);
+            result.lineto(lineStart.x + x + rp.cutCompensation(), lineStart.y);
+          }
+          
+          if (bidirectional) rp.toggleRasteringCutDirection();
+        }
+      }
+      return result;
+    }
+    
+    /**
+     * Intented for use in the clone mehtod. Copies all properties
+     * of that to this
+     * @param that 
+     */
+    protected void copyProperties(LaserCutter that)
+    {
+      for (String prop : that.getPropertyKeys())
+      {
+        setProperty(prop, that.getProperty(prop));
+      }
+    }
+    
+    /**
+     * Adjust defaults after deserializing driver from XML
+     * Use this if you add new fields to a driver and need them to be properly
+     * initialized to *non-falsy* values before use.
+     * 
+     * i.e. you add a new key that by default isn't 0/0.0/false/"". Without
+     * adding a default in here, then no matter what your constructor/initializer
+     * does, it will always be set to a falsey value after deserializing an old
+     * XML file.
+     */
+    protected void setKeysMissingFromDeserialization()
+    {
+    }
+    
     @Override
     public abstract LaserCutter clone();
+  
+    /**
+     * Called by XStream when deserializing XML settings files. Hook here to
+     * call setKeysMissingFromDeserialization.
+     */
+    private Object readResolve() {
+      setKeysMissingFromDeserialization();
+      return this;
+    }
 }
