@@ -64,7 +64,7 @@ public class gCodeCutter extends LaserCutter
 
   private static final String DRIVERVERSION = "1.2";
   
-  private static final String SETTING_OUTFILE = "gCode Output File";
+  private static final String SETTING_OUTFILE = "gCode Output Folder";
   private static final String SETTING_BEDWIDTH = "Laserbed width";
   private static final String SETTING_BEDHEIGHT = "Laserbed height";
   private static final String SETTING_RASTER_WHITESPACE = "Additional space per Raster line";
@@ -93,7 +93,7 @@ public class gCodeCutter extends LaserCutter
 //        Properties
 //#############################################################################
   
-  protected String outputFileName = "c:\\VisiCut_GCode.gcode";
+  protected String outputFolderName = "c:\\";
   
   protected double FeedRate_RapidMoves = 1500;
   
@@ -151,7 +151,7 @@ public class gCodeCutter extends LaserCutter
   {
     gCodeCutter clone = new gCodeCutter();
     
-    clone.outputFileName = outputFileName;
+    clone.outputFolderName = outputFolderName;
     
     clone.bedHeight = bedHeight;
     clone.bedWidth = bedWidth;
@@ -189,7 +189,7 @@ public class gCodeCutter extends LaserCutter
   {
     if (SETTING_OUTFILE.equals(attribute))
     {
-      return this.outputFileName;
+      return this.outputFolderName;
     }
     else if (SETTING_RASTER_WHITESPACE.equals(attribute))
     {
@@ -273,7 +273,7 @@ public class gCodeCutter extends LaserCutter
   {
     if (SETTING_OUTFILE.equals(attribute))
     {
-      this.outputFileName = (value != null ? (String) value : "");
+      this.outputFolderName = (value != null ? (String) value : "");
     }
     else if (SETTING_RASTER_WHITESPACE.equals(attribute))
     {
@@ -894,8 +894,8 @@ public class gCodeCutter extends LaserCutter
     
     this.writeJobCode(job, out, pl);  // calculate all the Gcode
     
-    pl.taskChanged(this, "File writing " + outputFileName);
-    FileOutputStream o = new FileOutputStream(new File(outputFileName));
+    pl.taskChanged(this, "File writing " + outputFolderName);
+    FileOutputStream o = new FileOutputStream(new File(outputFolderName + job.getName() + ".gcode"));
     o.write(buffer.toByteArray());
     o.close();
 
